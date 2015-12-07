@@ -78,16 +78,28 @@ namespace ShowReferences
 				return;
 
 			var bldr = new StringBuilder();
-			bldr.AppendFormat("Location: {0}", asm.Location);
+			bldr.AppendFormat("Location:  {0}", asm.Location);
 			bldr.AppendLine();
 			bldr.AppendFormat("Version: {0}", asm.GetName().Version);
 			bldr.AppendLine();
-			bldr.AppendFormat("FileVersion: {0}", GetVersion<AssemblyFileVersionAttribute>(asm, (a) => a.Version));
+			bldr.AppendFormat("File Version: {0}", GetVersion<AssemblyFileVersionAttribute>(asm, (a) => a.Version));
 			bldr.AppendLine();
-			bldr.AppendFormat("AssemblyVersion: {0}", GetVersion<AssemblyVersionAttribute>(asm, (a) => a.Version));
+			bldr.AppendFormat("Assembly Version: {0}", GetVersion<AssemblyVersionAttribute>(asm, (a) => a.Version));
 			bldr.AppendLine();
-			bldr.AppendFormat("AssemblyInformationalVersion: {0}",
+			bldr.AppendFormat("Informational Version: {0}",
 				GetVersion<AssemblyInformationalVersionAttribute>(asm, (a) => a.InformationalVersion));
+			bldr.AppendLine();
+			bldr.AppendFormat("Assembly Title: {0}", GetVersion<AssemblyTitleAttribute>(asm, (a) => a.Title));
+			bldr.AppendLine();
+			bldr.AppendFormat("File Description: {0}", GetVersion<AssemblyDescriptionAttribute>(asm, (a) => a.Description));
+			bldr.AppendLine();
+			bldr.AppendFormat("ProductName: {0}", GetVersion<AssemblyProductAttribute>(asm, (a) => a.Product));
+			bldr.AppendLine();
+			bldr.AppendFormat("Copyright: {0}", GetVersion<AssemblyCopyrightAttribute>(asm, (a) => a.Copyright));
+			bldr.AppendLine();
+			bldr.AppendFormat("AssemblyCompany: {0}", GetVersion<AssemblyCompanyAttribute>(asm, (a) => a.Company));
+			bldr.AppendLine();
+			bldr.AppendFormat("Trademark: {0}", GetVersion<AssemblyTrademarkAttribute>(asm, (a) => a.Trademark));
 
 			MessageBox.Show(bldr.ToString(), asm.GetName().Name);
 		}
