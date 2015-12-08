@@ -18,10 +18,12 @@ namespace ShowReferences
 		private TreeView _treeView;
 		private TreeItem _treeItems;
 		private Dictionary<string, TreeItem> _processedItems;
+		private Dictionary<string, TreeItem> _reverseItems;
 
 		public MainForm()
 		{
 			_processedItems = new Dictionary<string, TreeItem>();
+			_reverseItems = new Dictionary<string, TreeItem>();
 
 			Title = "Show Assembly References";
 			ClientSize = new Size(400, 600);
@@ -113,8 +115,13 @@ namespace ShowReferences
 		public void LoadAssembly(string fileName)
 		{
 			BaseDir = Path.GetDirectoryName(fileName);
+			_reverseItems.Clear();
+			_processedItems.Clear();
+			_treeItems.Children.Clear();
 			var assemblyName = AssemblyName.GetAssemblyName(fileName);
 			AddReferences(_treeItems, assemblyName);
+			_treeView.RefreshData();
+			ProcessReverseTree();
 			_treeView.RefreshData();
 		}
 
@@ -143,14 +150,20 @@ namespace ShowReferences
 			}
 		}
 
-		private TreeItem CloneTreeItem(TreeItem parent)
+		private ITreeItem CloneTreeItem(TreeItem parent, bool deepClone)
 		{
-			var clone = new TreeItem(parent.Children)
+			var clone = deepClone ? new TreeItem() : new TreeItem(parent.Children);
+			clone.Text = parent.Text;
+			clone.Expanded = parent.Expanded;
+			clone.Tag = parent.Tag;
+
+			if (!deepClone)
+				return clone;
+
+			foreach (TreeItem child in parent.Children.OrderBy(n => n.Text))
 			{
-				Text = parent.Text,
-				Expanded = parent.Expanded,
-				Tag = parent.Tag
-			};
+				clone.Children.Add(CloneTreeItem(child, true));
+			}
 			return clone;
 		}
 
@@ -158,7 +171,7 @@ namespace ShowReferences
 		{
 			if (_processedItems.ContainsKey(assemblyName.Name))
 			{
-				treeItem.Children.Add(CloneTreeItem(_processedItems[assemblyName.Name]));
+				treeItem.Children.Add(CloneTreeItem(_processedItems[assemblyName.Name], false));
 				return;
 			}
 
@@ -183,6 +196,38 @@ namespace ShowReferences
 			foreach (var child in asm.GetReferencedAssemblies().OrderBy(n => n.Name))
 			{
 				AddReferences(item, child);
+			}
+		}
+
+		private TreeItem GetOrCreateReverseItem(TreeItem item)
+		{
+			var childAssembly = item.Tag as Assembly;
+
+			var assemblyName = childAssembly == null ? item.Text : childAssembly.GetName().Name;
+			if (assemblyName.Contains("("))
+				assemblyName = assemblyName.Substring(0, assemblyName.IndexOf('('));
+			var assemblyItem = _reverseItems.ContainsKey(assemblyName) ? _reverseItems[assemblyName] : new TreeItem { Text = assemblyName };
+			_reverseItems[assemblyName] = assemblyItem;
+			return assemblyItem;
+		}
+
+		private void ProcessReverseTree()
+		{
+			foreach (var kv in _processedItems)
+			{
+				var reverseItem = GetOrCreateReverseItem(kv.Value);
+				foreach (TreeItem childItem in kv.Value.Children)
+				{
+					var assemblyItem = GetOrCreateReverseItem(childItem);
+					assemblyItem.Children.Add(reverseItem);
+					_reverseItems[assemblyItem.Text] = assemblyItem;
+				}
+			}
+
+			_treeItems.Children.Add(new TreeItem {Text = "--------------------------------------"});
+			foreach (var item in _reverseItems.Values.OrderBy(n => n.Text))
+			{
+				_treeItems.Children.Add(CloneTreeItem(item, true));
 			}
 		}
 	}
