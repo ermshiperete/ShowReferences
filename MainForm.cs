@@ -16,9 +16,12 @@ namespace ShowReferences
 	public class MainForm: Form
 	{
 		private TreeView _treeView;
+		private TreeView _reverseTreeView;
 		private TreeItem _treeItems;
+		private TreeItem _reverseTreeItems;
 		private Dictionary<string, TreeItem> _processedItems;
 		private Dictionary<string, TreeItem> _reverseItems;
+		private TableLayout _assemblyDetails;
 
 		public MainForm()
 		{
@@ -26,7 +29,7 @@ namespace ShowReferences
 			_reverseItems = new Dictionary<string, TreeItem>();
 
 			Title = "Show Assembly References";
-			ClientSize = new Size(400, 600);
+			ClientSize = new Size(600, 600);
 			Resizable = true;
 			Menu = new MenuBar {
 				Items = {
@@ -50,9 +53,10 @@ namespace ShowReferences
 				Text = "Root"
 			};
 			_treeView = new TreeView {
-				Size = new Size(350, 550),
+				Size = new Size(200, 550),
 				DataStore = _treeItems
 			};
+			_treeView.SelectionChanged += TreeViewOnSelectionChanged;
 			if (Platform.Supports<ContextMenu>())
 			{
 				var menu = new ContextMenu();
@@ -62,8 +66,77 @@ namespace ShowReferences
 
 				_treeView.ContextMenu = menu;
 			}
-			layout.AddRow(_treeView);
+			var details = new DynamicLayout { DefaultSpacing = new Size(5, 5), Padding = new Padding(10) };
+			_assemblyDetails = new TableLayout(2, 11) { Padding = new Padding(10), Spacing = new Size(5, 5) };
+			_assemblyDetails.Add(new Panel { Content = new Label { Text = "Location:"}}, 0, 0);
+			_assemblyDetails.Add(new Panel { Content = new Label() }, 1, 0);
+			_assemblyDetails.Add(new Panel { Content = new Label { Text = "Version:" } }, 0, 1);
+			_assemblyDetails.Add(new Panel { Content = new Label() }, 1, 1);
+			_assemblyDetails.Add(new Panel { Content = new Label { Text = "File Version:" } }, 0, 2);
+			_assemblyDetails.Add(new Panel { Content = new Label() }, 1, 2);
+			_assemblyDetails.Add(new Panel { Content = new Label { Text = "Assembly Version:" } }, 0, 3);
+			_assemblyDetails.Add(new Panel { Content = new Label() }, 1, 3);
+			_assemblyDetails.Add(new Panel { Content = new Label { Text = "Informational Version:" } }, 0, 4);
+			_assemblyDetails.Add(new Panel { Content = new Label() }, 1, 4);
+			_assemblyDetails.Add(new Panel { Content = new Label { Text = "Assembly Title:" } }, 0, 5);
+			_assemblyDetails.Add(new Panel { Content = new Label() }, 1, 5);
+			_assemblyDetails.Add(new Panel { Content = new Label { Text = "File Description:" } }, 0, 6);
+			_assemblyDetails.Add(new Panel { Content = new Label() }, 1, 6);
+			_assemblyDetails.Add(new Panel { Content = new Label { Text = "Product Name:" } }, 0, 7);
+			_assemblyDetails.Add(new Panel { Content = new Label() }, 1, 7);
+			_assemblyDetails.Add(new Panel { Content = new Label { Text = "Copyright:" } }, 0, 8);
+			_assemblyDetails.Add(new Panel { Content = new Label() }, 1, 8);
+			_assemblyDetails.Add(new Panel { Content = new Label { Text = "Company:" } }, 0, 9);
+			_assemblyDetails.Add(new Panel { Content = new Label() }, 1, 9);
+			_assemblyDetails.Add(new Panel { Content = new Label { Text = "Trademark:" } }, 0, 10);
+			_assemblyDetails.Add(new Panel { Content = new Label() }, 1, 10);
+
+			details.AddRow(_assemblyDetails);
+			details.AddRow(new Panel { Content = new Label {Text = "Assemblies that reference this assembly:"}});
+			_reverseTreeItems = new TreeItem { Text = "Root" };
+			_reverseTreeView = new TreeView { DataStore = _reverseTreeItems };
+			details.AddRow(_reverseTreeView);
+
+			layout.AddRow(_treeView, details);
 			Content = layout;
+		}
+
+		private void EmptyAssemblyDetails()
+		{
+			for (int i = 0; i < 11; i++)
+			{
+				((Label) ((Panel) _assemblyDetails.Rows[0].Cells[1].Control).Content).Text = string.Empty;
+			}
+		}
+
+		private void TreeViewOnSelectionChanged(object sender, EventArgs eventArgs)
+		{
+			EmptyAssemblyDetails();
+			var item = _treeView.SelectedItem as TreeItem;
+			if (item == null)
+				return;
+			var asm = item.Tag as Assembly;
+			if (asm == null)
+				return;
+
+			((Label)((Panel) _assemblyDetails.Rows[0].Cells[1].Control).Content).Text = asm.Location;
+			((Label)((Panel) _assemblyDetails.Rows[1].Cells[1].Control).Content).Text = asm.GetName().Version.ToString();
+			((Label)((Panel) _assemblyDetails.Rows[2].Cells[1].Control).Content).Text = GetVersion<AssemblyFileVersionAttribute>(asm, (a) => a.Version);
+			((Label)((Panel) _assemblyDetails.Rows[3].Cells[1].Control).Content).Text = GetVersion<AssemblyVersionAttribute>(asm, (a) => a.Version);
+			((Label)((Panel) _assemblyDetails.Rows[4].Cells[1].Control).Content).Text = GetVersion<AssemblyInformationalVersionAttribute>(asm, (a) => a.InformationalVersion);
+			((Label)((Panel) _assemblyDetails.Rows[5].Cells[1].Control).Content).Text = GetVersion<AssemblyTitleAttribute>(asm, (a) => a.Title);
+			((Label)((Panel) _assemblyDetails.Rows[6].Cells[1].Control).Content).Text = GetVersion<AssemblyDescriptionAttribute>(asm, (a) => a.Description);
+			((Label)((Panel) _assemblyDetails.Rows[7].Cells[1].Control).Content).Text = GetVersion<AssemblyProductAttribute>(asm, (a) => a.Product);
+			((Label)((Panel) _assemblyDetails.Rows[8].Cells[1].Control).Content).Text = GetVersion<AssemblyCopyrightAttribute>(asm, (a) => a.Copyright);
+			((Label)((Panel) _assemblyDetails.Rows[9].Cells[1].Control).Content).Text = GetVersion<AssemblyCompanyAttribute>(asm, (a) => a.Company);
+			((Label)((Panel)_assemblyDetails.Rows[10].Cells[1].Control).Content).Text = GetVersion<AssemblyTrademarkAttribute>(asm, (a) => a.Trademark);
+
+			_reverseTreeItems.Children.Clear();
+
+			var reverseItem = _reverseItems[asm.GetName().Name];
+			reverseItem.Expanded = true;
+			_reverseTreeItems.Children.Add(reverseItem);
+			_reverseTreeView.RefreshData();
 		}
 
 		private delegate object VersionDelegate<T>(T attr);
@@ -224,11 +297,11 @@ namespace ShowReferences
 				}
 			}
 
-			_treeItems.Children.Add(new TreeItem {Text = "--------------------------------------"});
-			foreach (var item in _reverseItems.Values.OrderBy(n => n.Text))
-			{
-				_treeItems.Children.Add(CloneTreeItem(item, true));
-			}
+			//_treeItems.Children.Add(new TreeItem {Text = "--------------------------------------"});
+			//foreach (var item in _reverseItems.Values.OrderBy(n => n.Text))
+			//{
+			//	_treeItems.Children.Add(CloneTreeItem(item, true));
+			//}
 		}
 	}
 }
