@@ -105,7 +105,7 @@ namespace ShowReferences
 		{
 			for (int i = 0; i < 11; i++)
 			{
-				((Label) ((Panel) _assemblyDetails.Rows[0].Cells[1].Control).Content).Text = string.Empty;
+				((Label) ((Panel) _assemblyDetails.Rows[i].Cells[1].Control).Content).Text = string.Empty;
 			}
 		}
 
@@ -193,6 +193,7 @@ namespace ShowReferences
 			_treeItems.Children.Clear();
 			var assemblyName = AssemblyName.GetAssemblyName(fileName);
 			AddReferences(_treeItems, assemblyName);
+			_treeItems.Children.First().Expanded = true;
 			_treeView.RefreshData();
 			ProcessReverseTree();
 			_treeView.RefreshData();
