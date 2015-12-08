@@ -16,17 +16,19 @@ namespace ShowReferences
 	public class MainForm: Form
 	{
 		private int _keyCount;
-		private TreeView _treeView;
-		private TreeView _reverseTreeView;
-		private TreeItem _treeItems;
-		private TreeItem _reverseTreeItems;
-		private Dictionary<string, TreeItem> _processedItems;
-		private Dictionary<string, TreeItem> _reverseItems;
-		private TableLayout _assemblyDetails;
+		private readonly TreeView _treeView;
+		private readonly TreeView _reverseTreeView;
+		private readonly TreeItem _treeItems;
+		private readonly TreeItem _reverseTreeItems;
+		private readonly Dictionary<string, TreeItem> _processedItems;
+		private readonly Dictionary<string, List<string>> _allAssemblies;
+		private readonly Dictionary<string, TreeItem> _reverseItems;
+		private readonly TableLayout _assemblyDetails;
 
 		public MainForm()
 		{
 			_processedItems = new Dictionary<string, TreeItem>();
+			_allAssemblies = new Dictionary<string, List<string>>();
 			_reverseItems = new Dictionary<string, TreeItem>();
 
 			Title = "Show Assembly References";
@@ -216,6 +218,7 @@ namespace ShowReferences
 			_processedItems.Clear();
 			_treeItems.Children.Clear();
 			var assemblyName = AssemblyName.GetAssemblyName(fileName);
+			LoadAllReferences(assemblyName);
 			AddReferences(_treeItems, assemblyName, false);
 			_treeItems.Children.First().Expanded = true;
 			_treeView.RefreshData();
@@ -264,6 +267,24 @@ namespace ShowReferences
 				clone.Children.Add(CloneTreeItem(child, true));
 			}
 			return clone;
+		}
+
+		private void LoadAllReferences(AssemblyName assemblyName)
+		{
+			if (_allAssemblies.ContainsKey(assemblyName.Name))
+				return;
+
+			var asm = TryLoadAssembly(assemblyName);
+			var list = new List<string>();
+			_allAssemblies[assemblyName.Name] = list;
+			if (asm == null || asm.GlobalAssemblyCache)
+				return;
+
+			foreach (var child in asm.GetReferencedAssemblies())
+			{
+				list.Add(child.Name);
+				LoadAllReferences(child);
+			}
 		}
 
 		private TreeItem AddReferences(TreeItem treeItem, AssemblyName assemblyName, bool makeLazy, int level = 0)
@@ -333,11 +354,8 @@ namespace ShowReferences
 			}
 		}
 
-		private TreeItem GetOrCreateReverseItem(TreeItem item)
+		private TreeItem GetOrCreateReverseItem(string assemblyName)
 		{
-			var assemblyName = GetAssemblyName(item);
-			if (assemblyName.Contains("("))
-				assemblyName = assemblyName.Substring(0, assemblyName.IndexOf('('));
 			var assemblyItem = _reverseItems.ContainsKey(assemblyName) ? _reverseItems[assemblyName] : new TreeItem { Text = assemblyName, Key = TreeItemKey };
 			_reverseItems[assemblyName] = assemblyItem;
 			return assemblyItem;
@@ -352,10 +370,10 @@ namespace ShowReferences
 
 		private void ProcessReverseTree()
 		{
-			foreach (var kv in _processedItems)
+			foreach (var kv in _allAssemblies)
 			{
-				var reverseItem = GetOrCreateReverseItem(kv.Value);
-				foreach (TreeItem childItem in kv.Value.Children)
+				var reverseItem = GetOrCreateReverseItem(kv.Key);
+				foreach (var childItem in kv.Value)
 				{
 					var assemblyItem = GetOrCreateReverseItem(childItem);
 					assemblyItem.Children.Add(reverseItem);
