@@ -1,6 +1,7 @@
 ﻿// Copyright (c) 2015 SIL International
 // This software is licensed under the MIT License (http://opensource.org/licenses/MIT)
 using System;
+using System.Collections.Generic;
 using Eto.Forms;
 using Eto.Drawing;
 using ShowReferences.Commands;
@@ -16,9 +17,12 @@ namespace ShowReferences
 	{
 		private TreeView _treeView;
 		private TreeItem _treeItems;
+		private Dictionary<string, TreeItem> _processedItems;
 
 		public MainForm()
 		{
+			_processedItems = new Dictionary<string, TreeItem>();
+
 			Title = "Show Assembly References";
 			ClientSize = new Size(400, 600);
 			Resizable = true;
@@ -139,9 +143,26 @@ namespace ShowReferences
 			}
 		}
 
+		private TreeItem CloneTreeItem(TreeItem parent)
+		{
+			var clone = new TreeItem(parent.Children)
+			{
+				Text = parent.Text,
+				Expanded = parent.Expanded,
+				Tag = parent.Tag
+			};
+			return clone;
+		}
+
 		private void AddReferences(TreeItem treeItem, AssemblyName assemblyName)
 		{
-			Assembly asm = TryLoadAssembly(assemblyName);
+			if (_processedItems.ContainsKey(assemblyName.Name))
+			{
+				treeItem.Children.Add(CloneTreeItem(_processedItems[assemblyName.Name]));
+				return;
+			}
+
+			var asm = TryLoadAssembly(assemblyName);
 			string append = string.Empty;
 			if (asm == null)
 				append = " (not available)";
@@ -154,6 +175,7 @@ namespace ShowReferences
 				Tag = asm
 			};
 			treeItem.Children.Add(item);
+			_processedItems.Add(assemblyName.Name, item);
 
 			if (asm == null || asm.GlobalAssemblyCache)
 				return;
