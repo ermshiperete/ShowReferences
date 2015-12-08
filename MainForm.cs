@@ -15,6 +15,7 @@ namespace ShowReferences
 {
 	public class MainForm: Form
 	{
+		private int _keyCount;
 		private TreeView _treeView;
 		private TreeView _reverseTreeView;
 		private TreeItem _treeItems;
@@ -50,13 +51,15 @@ namespace ShowReferences
 
 			var layout = new DynamicLayout { DefaultSpacing = new Size(5, 5), Padding = new Padding(10) };
 			_treeItems = new TreeItem {
-				Text = "Root"
+				Text = "Root",
+				Key = TreeItemKey
 			};
 			_treeView = new TreeView {
 				Size = new Size(200, 550),
 				DataStore = _treeItems
 			};
 			_treeView.SelectionChanged += TreeViewOnSelectionChanged;
+			_treeView.Expanding += TreeViewOnExpanding;
 			if (Platform.Supports<ContextMenu>())
 			{
 				var menu = new ContextMenu();
@@ -93,12 +96,27 @@ namespace ShowReferences
 
 			details.AddRow(_assemblyDetails);
 			details.AddRow(new Panel { Content = new Label {Text = "Assemblies that reference this assembly:"}});
-			_reverseTreeItems = new TreeItem { Text = "Root" };
+			_reverseTreeItems = new TreeItem { Text = "Root", Key = TreeItemKey };
 			_reverseTreeView = new TreeView { DataStore = _reverseTreeItems };
 			details.AddRow(_reverseTreeView);
 
 			layout.AddRow(_treeView, details);
 			Content = layout;
+		}
+
+		private string TreeItemKey
+		{
+			get { return _keyCount++.ToString(); }
+		}
+		private void TreeViewOnExpanding(object sender, TreeViewItemCancelEventArgs treeViewItemCancelEventArgs)
+		{
+			var item = treeViewItemCancelEventArgs.Item as LazyTreeItem;
+			if (item != null)
+			{
+				var newItem = AddReferences((TreeItem)item.Parent, new AssemblyName(GetAssemblyName(item)), false);
+				newItem.Expanded = true;
+				_treeView.RefreshItem(item.Parent);
+			}
 		}
 
 		private void EmptyAssemblyDetails()
@@ -132,6 +150,12 @@ namespace ShowReferences
 			((Label)((Panel)_assemblyDetails.Rows[10].Cells[1].Control).Content).Text = GetVersion<AssemblyTrademarkAttribute>(asm, (a) => a.Trademark);
 
 			_reverseTreeItems.Children.Clear();
+
+			if (!_reverseItems.ContainsKey(asm.GetName().Name))
+			{
+				_reverseItems.Clear();
+				ProcessReverseTree();
+			}
 
 			var reverseItem = _reverseItems[asm.GetName().Name];
 			reverseItem.Expanded = true;
@@ -192,7 +216,7 @@ namespace ShowReferences
 			_processedItems.Clear();
 			_treeItems.Children.Clear();
 			var assemblyName = AssemblyName.GetAssemblyName(fileName);
-			AddReferences(_treeItems, assemblyName);
+			AddReferences(_treeItems, assemblyName, false);
 			_treeItems.Children.First().Expanded = true;
 			_treeView.RefreshData();
 			ProcessReverseTree();
@@ -227,6 +251,7 @@ namespace ShowReferences
 		private ITreeItem CloneTreeItem(TreeItem parent, bool deepClone)
 		{
 			var clone = deepClone ? new TreeItem() : new TreeItem(parent.Children);
+			clone.Key = TreeItemKey;
 			clone.Text = parent.Text;
 			clone.Expanded = parent.Expanded;
 			clone.Tag = parent.Tag;
@@ -241,12 +266,20 @@ namespace ShowReferences
 			return clone;
 		}
 
-		private void AddReferences(TreeItem treeItem, AssemblyName assemblyName)
+		private TreeItem AddReferences(TreeItem treeItem, AssemblyName assemblyName, bool makeLazy, int level = 0)
 		{
+			for (int i = 0; i < level; i++) Console.Write("    ");
+			Console.WriteLine(assemblyName.Name);
+
 			if (_processedItems.ContainsKey(assemblyName.Name))
 			{
-				treeItem.Children.Add(CloneTreeItem(_processedItems[assemblyName.Name], false));
-				return;
+				var processedItem = _processedItems[assemblyName.Name];
+				var lazyItem = processedItem as LazyTreeItem;
+				if (lazyItem == null)
+				{
+					treeItem.Children.Add(CloneTreeItem(processedItem, false));
+					return processedItem;
+				}
 			}
 
 			var asm = TryLoadAssembly(assemblyName);
@@ -256,33 +289,65 @@ namespace ShowReferences
 			else if (asm.GlobalAssemblyCache)
 				append = " (GAC)";
 
-			var item = new TreeItem {
-				Text = assemblyName.Name + append,
-				Expanded = false,
-				Tag = asm
-			};
-			treeItem.Children.Add(item);
-			_processedItems.Add(assemblyName.Name, item);
+			var item = makeLazy ? new LazyTreeItem() : new TreeItem();
+			item.Key = TreeItemKey;
+			item.Text = assemblyName.Name + append;
+			item.Expanded = false;
+			item.Tag = asm;
+			if (!makeLazy && _processedItems.ContainsKey(assemblyName.Name))
+			{
+				ReplaceChild(treeItem, item);
+			}
+			else
+				treeItem.Children.Add(item);
+			_processedItems[assemblyName.Name] = item;
 
 			if (asm == null || asm.GlobalAssemblyCache)
-				return;
+				return item;
 
-			foreach (var child in asm.GetReferencedAssemblies().OrderBy(n => n.Name))
+			if (makeLazy)
 			{
-				AddReferences(item, child);
+				var references = asm.GetReferencedAssemblies();
+				if (references.Any())
+					item.Children.Add(new LazyTreeItem { Text = references.First().Name });
+			}
+			else
+			{
+				foreach (var child in asm.GetReferencedAssemblies().OrderBy(n => n.Name))
+				{
+					AddReferences(item, child, true, level + 1);
+				}
+			}
+			return item;
+		}
+
+		private static void ReplaceChild(TreeItem parent, TreeItem child)
+		{
+			for (int i = 0; i < parent.Count; i++)
+			{
+				if (parent.Children[i].Text == child.Text)
+				{
+					parent.Children[i] = child;
+					return;
+				}
 			}
 		}
 
 		private TreeItem GetOrCreateReverseItem(TreeItem item)
 		{
-			var childAssembly = item.Tag as Assembly;
-
-			var assemblyName = childAssembly == null ? item.Text : childAssembly.GetName().Name;
+			var assemblyName = GetAssemblyName(item);
 			if (assemblyName.Contains("("))
 				assemblyName = assemblyName.Substring(0, assemblyName.IndexOf('('));
-			var assemblyItem = _reverseItems.ContainsKey(assemblyName) ? _reverseItems[assemblyName] : new TreeItem { Text = assemblyName };
+			var assemblyItem = _reverseItems.ContainsKey(assemblyName) ? _reverseItems[assemblyName] : new TreeItem { Text = assemblyName, Key = TreeItemKey };
 			_reverseItems[assemblyName] = assemblyItem;
 			return assemblyItem;
+		}
+
+		private static string GetAssemblyName(TreeItem item)
+		{
+			var assembly = item.Tag as Assembly;
+			var assemblyName = assembly == null ? item.Text : assembly.GetName().Name;
+			return assemblyName;
 		}
 
 		private void ProcessReverseTree()
@@ -299,9 +364,9 @@ namespace ShowReferences
 			}
 
 			//_treeItems.Children.Add(new TreeItem {Text = "--------------------------------------"});
-			//foreach (var item in _reverseItems.Values.OrderBy(n => n.Text))
+			//foreach (var child in _reverseItems.Values.OrderBy(n => n.Text))
 			//{
-			//	_treeItems.Children.Add(CloneTreeItem(item, true));
+			//	_treeItems.Children.Add(CloneTreeItem(child, true));
 			//}
 		}
 	}
