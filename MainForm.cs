@@ -106,6 +106,12 @@ namespace ShowReferences
 			Content = layout;
 		}
 
+		public MainForm(string filename): this()
+		{
+			if (File.Exists(filename))
+				LoadAssembly(filename);
+		}
+
 		private string TreeItemKey
 		{
 			get { return _keyCount++.ToString(); }

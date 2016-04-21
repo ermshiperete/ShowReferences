@@ -10,7 +10,10 @@ namespace ShowReferences
 		[STAThread]
 		public static void Main(string[] args)
 		{
-			new Application().Run(new MainForm());
+			string filename = null;
+			if (args.Length > 0)
+				filename = args[0];
+			new Application().Run(new MainForm(filename));
 		}
 	}
 }
