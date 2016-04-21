@@ -21,14 +21,13 @@ namespace ShowReferences
 		private readonly TreeItem _treeItems;
 		private readonly TreeItem _reverseTreeItems;
 		private readonly Dictionary<string, TreeItem> _processedItems;
-		private readonly Dictionary<string, List<string>> _allAssemblies;
+		private readonly Dictionary<string, List<string>> _allAssemblies = new Dictionary<string, List<string>>();
 		private readonly Dictionary<string, TreeItem> _reverseItems;
 		private readonly TableLayout _assemblyDetails;
 
 		public MainForm()
 		{
 			_processedItems = new Dictionary<string, TreeItem>();
-			_allAssemblies = new Dictionary<string, List<string>>();
 			_reverseItems = new Dictionary<string, TreeItem>();
 
 			Title = "Show Assembly References";
@@ -112,10 +111,39 @@ namespace ShowReferences
 				LoadAssembly(filename);
 		}
 
+		public MainForm(List<string> filenames)
+		{
+			Debug.Assert(Options.Current.NoUI);
+			foreach (var filename in filenames)
+			{
+				BaseDir = Path.GetDirectoryName(filename);
+				var assemblyName = GetAssemblyName(filename);
+				if (assemblyName == null)
+					continue;
+
+				LoadAllReferences(assemblyName);
+				DisplayReferences(assemblyName);
+				Console.WriteLine();
+			}
+		}
+
+		private AssemblyName GetAssemblyName(string filename)
+		{
+			try
+			{
+				return AssemblyName.GetAssemblyName(filename);
+			}
+			catch (BadImageFormatException)
+			{
+				return null;
+			}
+		}
+
 		private string TreeItemKey
 		{
 			get { return _keyCount++.ToString(); }
 		}
+
 		private void TreeViewOnExpanding(object sender, TreeViewItemCancelEventArgs treeViewItemCancelEventArgs)
 		{
 			var item = treeViewItemCancelEventArgs.Item as LazyTreeItem;
@@ -255,6 +283,10 @@ namespace ShowReferences
 			{
 				return TryLoadAssembly(assemblyName, ".dll") ?? TryLoadAssembly(assemblyName, ".exe");
 			}
+			catch (BadImageFormatException)
+			{
+				return null;
+			}
 		}
 
 		private ITreeItem CloneTreeItem(TreeItem parent, bool deepClone)
@@ -293,10 +325,51 @@ namespace ShowReferences
 			}
 		}
 
+		private void DisplayReferences(AssemblyName assemblyName, int level = 0)
+		{
+			if (Options.Current.OneLine)
+			{
+				if (level == 0)
+					Console.Write("{0}: ", assemblyName.Name);
+				else
+					Console.Write("{0}, ", assemblyName.Name);
+			}
+			else
+			{
+				for (int i = 0; i < level; i++)
+					Console.Write("    ");
+				Console.WriteLine(assemblyName.Name);
+			}
+
+			var asm = TryLoadAssembly(assemblyName);
+
+			if (asm == null || asm.GlobalAssemblyCache || level > 0)
+				return;
+
+			foreach (var child in asm.GetReferencedAssemblies().OrderBy(n => n.Name))
+			{
+				DisplayReferences(child, level + 1);
+			}
+		}
+
 		private TreeItem AddReferences(TreeItem treeItem, AssemblyName assemblyName, bool makeLazy, int level = 0)
 		{
-			for (int i = 0; i < level; i++) Console.Write("    ");
-			Console.WriteLine(assemblyName.Name);
+			if (Options.Current.OneLine)
+			{
+				if (level == 0)
+					Console.Write("{0}: ", assemblyName.Name);
+				else
+					Console.Write("{0}, ", assemblyName.Name);
+			}
+			else
+			{
+				for (int i = 0; i < level; i++)
+					Console.Write("    ");
+				Console.WriteLine(assemblyName.Name);
+			}
+
+			if (Options.Current.NoUI)
+				makeLazy = true;
 
 			if (_processedItems.ContainsKey(assemblyName.Name))
 			{

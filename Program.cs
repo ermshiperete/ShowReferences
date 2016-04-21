@@ -10,10 +10,19 @@ namespace ShowReferences
 		[STAThread]
 		public static void Main(string[] args)
 		{
+			var app = new Application();
+			var options = Options.ParseCommandLineArgs(args);
+			if (options.NoUI)
+			{
+				new MainForm(options.Filenames);
+				return;
+			}
+
 			string filename = null;
-			if (args.Length > 0)
-				filename = args[0];
-			new Application().Run(new MainForm(filename));
+			if (options.Filenames != null && options.Filenames.Count > 0)
+				filename = options.Filenames[0];
+
+			app.Run(new MainForm(filename));
 		}
 	}
 }
