@@ -14,7 +14,7 @@ namespace ShowReferences
 			var options = Options.ParseCommandLineArgs(args);
 			if (options.NoUI)
 			{
-				new MainForm(options.Filenames);
+				new MainForm(options.Filenames, options.All);
 				return;
 			}
 

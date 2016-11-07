@@ -10,11 +10,14 @@ namespace ShowReferences
 	{
 		public static Options Current { get; private set; }
 
-		[Option]
+		[Option("oneline", HelpText = "Output everything on one line instead of tree-like output")]
 		public bool OneLine { get; set; }
 
-		[Option]
+		[Option("noui", HelpText = "Only output to console, don't show UI")]
 		public bool NoUI { get; set; }
+
+		[Option("all", HelpText = "Show references of all referenced assemblies")]
+		public bool All { get; set; }
 
 		[ValueList(typeof(List<string>))]
 		public List<string> Filenames { get; set; }

@@ -111,7 +111,7 @@ namespace ShowReferences
 				LoadAssembly(filename);
 		}
 
-		public MainForm(List<string> filenames)
+		public MainForm(List<string> filenames, bool recursive)
 		{
 			Debug.Assert(Options.Current.NoUI);
 			foreach (var filename in filenames)
@@ -122,7 +122,7 @@ namespace ShowReferences
 					continue;
 
 				LoadAllReferences(assemblyName);
-				DisplayReferences(assemblyName);
+				DisplayReferences(assemblyName, recursive);
 				Console.WriteLine();
 			}
 		}
@@ -325,7 +325,7 @@ namespace ShowReferences
 			}
 		}
 
-		private void DisplayReferences(AssemblyName assemblyName, int level = 0)
+		private void DisplayReferences(AssemblyName assemblyName, bool recursive = false, int level = 0)
 		{
 			if (Options.Current.OneLine)
 			{
@@ -343,12 +343,12 @@ namespace ShowReferences
 
 			var asm = TryLoadAssembly(assemblyName);
 
-			if (asm == null || asm.GlobalAssemblyCache || level > 0)
+			if (asm == null || asm.GlobalAssemblyCache || (level > 0 && !recursive))
 				return;
 
 			foreach (var child in asm.GetReferencedAssemblies().OrderBy(n => n.Name))
 			{
-				DisplayReferences(child, level + 1);
+				DisplayReferences(child, recursive, level + 1);
 			}
 		}
 
